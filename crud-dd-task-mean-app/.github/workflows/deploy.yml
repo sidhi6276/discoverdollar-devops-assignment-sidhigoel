@@ -1,0 +1,39 @@
+name: CI-CD Pipeline
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+    - name: Login DockerHub
+      run: |
+        echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
+    - name: Build Backend Image
+      run: |
+        docker build -t sidhigoel/dd-backend ./backend
+    - name: Build Frontend Image
+      run: |
+        docker build -t sidhigoel/dd-frontend ./frontend
+    - name: Push Backend Image
+      run: |
+        docker push sidhigoel/dd-backend
+    - name: Push Frontend Image
+      run: |
+        docker push sidhigoel/dd-frontend
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ubuntu
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+          cd ~/discoverdollar-devops-assignment/crud-dd-task-mean-app
+          git pull origin main
+          docker pull sidhigoel/dd-backend
+          docker pull sidhigoel/dd-frontend
+          docker-compose down
+          docker-compose up -d
