@@ -274,33 +274,7 @@ Expected Output:
 
 ---
 
-## 📌 Screenshots Required
 
-### Docker Containers
-
-
-docker ps
-
-
-### Docker Images
-
-
-docker images
-
-
-### CI/CD Pipeline
-
-GitHub Actions workflow run screenshot
-
-### Application UI
-
-Angular application running screenshot
-
-### Nginx Setup
-
-Nginx reverse proxy screenshot
-
----
 
 ## 📌 Author
 
