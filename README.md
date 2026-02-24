@@ -274,6 +274,10 @@ Expected Output:
 
 ---
 
+# Screenshots
+
+All screenshots are available in the screenshots folder.
+
 
 
 ## 📌 Author
