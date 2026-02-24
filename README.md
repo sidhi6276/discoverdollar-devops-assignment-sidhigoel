@@ -26,276 +26,212 @@ Prerequisites
 Docker & Docker Compose installed
 Git installed
 
-## 📌 EC2 Server Details
-
-Cloud Provider: AWS  
-Instance Type: t3.small  
-OS: Ubuntu 22.04
-
-Application URL: http://13.127.89.222
-
----
-
-## 📌 Docker Images
-
-DockerHub Repository:
-
-Backend Image: sidhigoel/dd-backend:latest
-
-
-Frontend Image:sidhigoel/dd-frontend:latest
----
-
-## 📌 Project Structure
-
-crud-dd-task-mean-app
-│
-├── backend
-│ ├── Dockerfile
-│ ├── server.js
-│ └── package.json
-│
-├── frontend
-│ ├── Dockerfile
-│ └── angular files
-│
-├── docker-compose.yml
-│
-└── README.md
-
----
-
-## 📌 Backend Dockerfile
-
-
-FROM node:18
-
-WORKDIR /app
-
-COPY package*.json ./
-
-RUN npm install
-
-COPY . .
-
-EXPOSE 8080
-
-CMD ["npm","start"]
-
-
----
-
-## 📌 Frontend Dockerfile
-
-
-FROM node:18 AS build
-
-WORKDIR /app
-
-COPY package*.json ./
-
-RUN npm install
-
-COPY . .
-
-RUN npm run build
-
-FROM nginx:alpine
-
-RUN rm -rf /usr/share/nginx/html/*
-
-COPY --from=build /app/dist/angular-15-crud /usr/share/nginx/html
-
-EXPOSE 80
-
-CMD ["nginx","-g","daemon off;"]
-
-
----
-
-## 📌 Docker Compose Configuration
-
-
-version: '3'
-
-services:
-
-mongodb:
-image: mongo:latest
-container_name: mongodb
-restart: always
-ports:
-- "27017:27017"
-volumes:
-- mongo_data:/data/db
-
-backend:
-build: ./backend
-container_name: backend
-restart: always
-ports:
-- "5000:8080"
-depends_on:
-- mongodb
-
-frontend:
-build: ./frontend
-container_name: frontend
-restart: always
-ports:
-- "80:80"
-depends_on:
-- backend
-
-volumes:
-
-mongo_data:
-
-
----
-
-## 📌 Setup Instructions
-
-### Step 1: Clone Repository
-
-
+Steps
+bash# 1. Clone the repository
 git clone https://github.com/sidhi6276/discoverdollar-devops-assignment-sidhigoel.git
-
 cd discoverdollar-devops-assignment-sidhigoel
 
+# 2. Build and start all containers
+docker-compose up --build -d
+
+# 3. Access the application
+# Frontend: http://localhost
+# Backend API: http://localhost/api
+
+🐳 Docker Setup
+Frontend Dockerfile
+dockerfileFROM node:18-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build --prod
+
+FROM nginx:alpine
+COPY --from=build /app/dist/* /usr/share/nginx/html/
+EXPOSE 80
+Backend Dockerfile
+dockerfileFROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["node", "server.js"]
+Docker Compose
+yamlversion: '3.8'
+
+services:
+  mongo:
+    image: mongo:6
+    container_name: mongo
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build: ./backend
+    container_name: backend
+    restart: always
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/meandb
+    depends_on:
+      - mongo
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    restart: always
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  mongo_data:
+
+🌐 Nginx Reverse Proxy Configuration
+nginxevents {}
+
+http {
+  server {
+    listen 80;
+
+    location / {
+      proxy_pass http://frontend:80;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /api/ {
+      proxy_pass http://backend:3000/;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+    }
+  }
+}
+The entire application is accessible via port 80 through Nginx.
+
+☁️ Cloud Deployment (AWS EC2)
+VM Setup
+
+Launch an Ubuntu 22.04 EC2 instance (t2.micro or above)
+Open inbound port 80 in the Security Group
+SSH into the instance:
+
+bashssh -i your-key.pem ubuntu@<EC2_PUBLIC_IP>
+
+Install Docker & Docker Compose:
+
+bashsudo apt update && sudo apt upgrade -y
+sudo apt install -y docker.io docker-compose
+sudo systemctl enable docker
+sudo usermod -aG docker ubuntu
+
+Clone the repo and deploy:
+
+bashgit clone https://github.com/sidhi6276/discoverdollar-devops-assignment-sidhigoel.git
+cd discoverdollar-devops-assignment-sidhigoel
+docker-compose up -d
+
+Access the app at: http://<EC2_PUBLIC_IP>
+
+
+🔄 CI/CD Pipeline (GitHub Actions)
+The pipeline triggers on every push to the main branch:
+
+Build Docker images for frontend and backend
+Push images to Docker Hub
+SSH into the EC2 VM and pull latest images + restart containers
+
+.github/workflows/ci-cd.yml
+yamlname: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Frontend Image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/mean-frontend:latest ./frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/mean-frontend:latest
+
+      - name: Build & Push Backend Image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/mean-backend:latest ./backend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/mean-backend:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd discoverdollar-devops-assignment-sidhigoel
+            git pull origin main
+            docker-compose pull
+            docker-compose up -d --force-recreate
+```
+
+### GitHub Secrets Required
+
+| Secret Name          | Description                    |
+|----------------------|--------------------------------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username       |
+| `DOCKERHUB_TOKEN`    | Docker Hub access token        |
+| `EC2_HOST`           | Public IP of your EC2 instance |
+| `EC2_SSH_KEY`        | Private SSH key for EC2 access |
 
 ---
 
-### Step 2: Install Docker
-
-
-sudo apt update
-sudo apt install docker.io -y
-
-
----
-
-### Step 3: Install Docker Compose
-
-
-sudo apt install docker-compose -y
-
-
----
-
-### Step 4: Run Application
-
-
-sudo docker-compose up -d --build
-
-
----
-
-### Step 5: Check Containers
-
-
-sudo docker ps
-
-
----
-
-## 📌 CI/CD Pipeline
-
-GitHub Actions is used for CI/CD automation.
-
-Pipeline automatically:
-
-- Builds Docker Images
-- Pushes images to DockerHub
-- Deploys application to EC2
-
-Workflow File Location:
-
-
-.github/workflows/deploy.yml
-
-
----
-
-## 📌 Nginx Reverse Proxy
-
-Nginx is configured on EC2.
-
-All traffic is routed through:
-
-
-Port 80
-
-
-Frontend:
-
-
-http://13.127.89.222
-
-
-Backend API:
-
-
-http://13.127.89.222/api/tutorials
-
-
----
-
-## 📌 API Testing
-
-
-curl http://13.127.89.222/api/tutorials
-
-
-Expected Output:
-
-
-[]
-
-
----
-
-## 📌 Screenshots Required
-
-### Docker Containers
-
-
-docker ps
-
-
-### Docker Images
-
-
-docker images
-
-
-### CI/CD Pipeline
-
-GitHub Actions workflow run screenshot
-
-### Application UI
-
-Angular application running screenshot
-
-### Nginx Setup
-
-Nginx reverse proxy screenshot
-
----
-
-## 📌 Author
-
-Sidhi Goel  
-MCA Student  
-DevOps Enthusiast
-
-GitHub:
-
-
-https://github.com/sidhi6276
-
-
-DockerHub:
-
-
-https://hub.docker.com/u/sidhigoel
+## 🐋 Docker Hub Images
+```
+docker pull sidhi6276/mean-frontend:latest
+docker pull sidhi6276/mean-backend:latest
+
+📸 Screenshots
+CI/CD Pipeline Execution
+(Add screenshot of GitHub Actions workflow run)
+Docker Image Build & Push
+(Add screenshot of Docker Hub with pushed images)
+Application UI
+(Add screenshot of working Angular app on the browser)
+Nginx Setup
+(Add screenshot of Nginx running / curl output)
+
+📌 Notes
+
+MongoDB runs as a Docker container using the official mongo:6 image
+Data is persisted using Docker named volumes (mongo_data)
+Cloud infrastructure (EC2) is kept running for live demo
+HTTPS and domain mapping not configured (as per task requirements)
+
+
+👩‍💻 Submitted By
+Sidhi Goel
+GitHub: sidhi6276
+Assignment: DiscoverDollar DevOps Internship – Feb 2026
