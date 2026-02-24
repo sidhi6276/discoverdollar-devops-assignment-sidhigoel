@@ -40,10 +40,7 @@ Application URL: http://13.127.89.222
 
 DockerHub Repository:
 
-Backend Image:
-
-sidhigoel/dd-backend:latest
-Frontend Image:
+Backend Image: sidhigoel/dd-backend:latest
 
 
-sidhigoel/dd-frontend:latest
+Frontend Image:sidhigoel/dd-frontend:latest
